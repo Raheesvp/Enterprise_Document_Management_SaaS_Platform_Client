@@ -15,26 +15,24 @@ import {
 
 @Injectable({ providedIn: "root" })
 export class AuthService {
-  // Angular signals for reactive state management
   private _currentUser = signal<UserInfo | null>(null);
-  private _token = signal<string | null>(null);
+  private _token       = signal<string | null>(null);
 
-  // Computed signals � auto-update when _currentUser changes
   currentUser = this._currentUser.asReadonly();
   isLoggedIn  = computed(() => this._currentUser() !== null);
-  isAdmin     = computed(() => this._currentUser()?.role === "Admin");
-  isManager   = computed(() => this._currentUser()?.role === "Manager"
-                            || this._currentUser()?.role === "Admin");
+  isAdmin     = computed(() =>
+    this._currentUser()?.role === "Admin");
+  isManager   = computed(() =>
+    this._currentUser()?.role === "Manager" ||
+    this._currentUser()?.role === "Admin");
 
   constructor(
-    private http: HttpClient,
+    private http:   HttpClient,
     private router: Router
   ) {
-    // Restore session from localStorage on app start
     this.restoreSession();
   }
 
-  // -- Login --------------------------------------------------
   login(request: LoginRequest): Observable<AuthResponse> {
     return this.http
       .post<AuthResponse>(
@@ -45,13 +43,11 @@ export class AuthService {
         tap((response) => this.handleAuthResponse(response)),
         catchError((error) => {
           console.error("Login failed:", error);
-          console.error(error.message)
           return throwError(() => error);
         })
       );
   }
 
-  // -- Register Tenant ----------------------------------------
   register(request: RegisterRequest): Observable<RegisterResponse> {
     return this.http.post<RegisterResponse>(
       `${environment.identityUrl}/api/identity/register`,
@@ -59,10 +55,10 @@ export class AuthService {
     );
   }
 
-  // -- Refresh Token ------------------------------------------
+  // Fix: API expects { userId, token } not { userId, refreshToken }
   refreshToken(): Observable<AuthResponse> {
     const refreshToken = localStorage.getItem("refreshToken");
-    const user = this._currentUser();
+    const user         = this._currentUser();
 
     if (!refreshToken || !user) {
       this.logout();
@@ -73,8 +69,8 @@ export class AuthService {
       .post<AuthResponse>(
         `${environment.identityUrl}/api/identity/refresh`,
         {
-          refreshToken,
           userId: user.userId,
+          token:  refreshToken,
         }
       )
       .pipe(
@@ -86,7 +82,6 @@ export class AuthService {
       );
   }
 
-  // -- Logout -------------------------------------------------
   logout(): void {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
@@ -96,29 +91,26 @@ export class AuthService {
     this.router.navigate(["/auth/login"]);
   }
 
-  // -- Get Current Token --------------------------------------
   getToken(): string | null {
     return this._token() ?? localStorage.getItem("accessToken");
   }
 
-  // -- Check Token Expiry -------------------------------------
   isTokenExpired(): boolean {
     const token = this.getToken();
     if (!token) return true;
-
     try {
       const decoded = jwtDecode<DecodedToken>(token);
-      const expiry  = decoded.exp * 1000;
-      return Date.now() > expiry - 60000; // 60s buffer
+      return Date.now() > decoded.exp * 1000 - 60000;
     } catch {
       return true;
     }
   }
 
-  // -- Private Helpers ----------------------------------------
   private handleAuthResponse(response: AuthResponse): void {
-    localStorage.setItem("accessToken",  response.accessToken);
-    localStorage.setItem("refreshToken", response.refreshToken);
+    localStorage.setItem("accessToken",
+      response.accessToken);
+    localStorage.setItem("refreshToken",
+      response.refreshToken);
     localStorage.setItem("currentUser",
       JSON.stringify(response.user));
 
@@ -132,9 +124,8 @@ export class AuthService {
 
     if (token && user) {
       try {
-        const decoded = jwtDecode<DecodedToken>(token);
+        const decoded   = jwtDecode<DecodedToken>(token);
         const isExpired = Date.now() > decoded.exp * 1000;
-
         if (!isExpired) {
           this._token.set(token);
           this._currentUser.set(JSON.parse(user));

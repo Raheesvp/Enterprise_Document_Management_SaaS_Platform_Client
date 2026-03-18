@@ -9,7 +9,7 @@ export const routes: Routes = [
     pathMatch: "full",
   },
 
-  // Auth routes — public (no guard)
+  // Auth routes — public
   {
     path: "auth",
     loadChildren: () =>
@@ -18,41 +18,47 @@ export const routes: Routes = [
       ),
   },
 
-  // Protected routes — require authentication
+  // Protected routes — wrapped in Shell layout
   {
-    path: "dashboard",
+    path: "",
     canActivate: [authGuard],
     loadComponent: () =>
-      import("./features/dashboard/dashboard.component").then(
-        (m) => m.DashboardComponent
+      import("./shared/components/layout/shell/shell.component").then(
+        (m) => m.ShellComponent
       ),
-  },
-  {
-    path: "documents",
-    canActivate: [authGuard],
-    loadChildren: () =>
-      import("./features/documents/documents.routes").then(
-        (m) => m.DOCUMENT_ROUTES
-      ),
-  },
-  {
-    path: "workflow",
-    canActivate: [authGuard],
-    loadChildren: () =>
-      import("./features/workflow/workflow.routes").then(
-        (m) => m.WORKFLOW_ROUTES
-      ),
-  },
-  {
-    path: "notifications",
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import("./features/notifications/notifications.component").then(
-        (m) => m.NotificationsComponent
-      ),
+    children: [
+      {
+        path: "dashboard",
+        loadComponent: () =>
+          import("./features/dashboard/dashboard.component").then(
+            (m) => m.DashboardComponent
+          ),
+      },
+      {
+        path: "documents",
+        loadChildren: () =>
+          import("./features/documents/documents.routes").then(
+            (m) => m.DOCUMENT_ROUTES
+          ),
+      },
+      {
+        path: "workflow",
+        loadChildren: () =>
+          import("./features/workflow/workflow.routes").then(
+            (m) => m.WORKFLOW_ROUTES
+          ),
+      },
+      {
+        path: "notifications",
+        loadComponent: () =>
+          import("./features/notifications/notifications.component").then(
+            (m) => m.NotificationsComponent
+          ),
+      },
+    ],
   },
 
-  // Wildcard redirect
+  // Wildcard
   {
     path: "**",
     redirectTo: "dashboard",
