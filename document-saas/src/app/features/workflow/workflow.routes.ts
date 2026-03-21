@@ -8,4 +8,11 @@ export const WORKFLOW_ROUTES: Routes = [
         (m) => m.WorkflowListComponent
       ),
   },
+  {
+    path: ":id",
+    loadComponent: () =>
+      import("./workflow-detail/workflow-detail.component").then(
+        (m) => m.WorkflowDetailComponent
+      ),
+  },
 ];
