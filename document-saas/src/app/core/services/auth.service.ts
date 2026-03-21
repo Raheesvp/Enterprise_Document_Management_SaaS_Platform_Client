@@ -30,6 +30,7 @@ export class AuthService {
     private http:   HttpClient,
     private router: Router
   ) {
+    // Restore session immediately on service creation
     this.restoreSession();
   }
 
@@ -55,7 +56,6 @@ export class AuthService {
     );
   }
 
-  // Fix: API expects { userId, token } not { userId, refreshToken }
   refreshToken(): Observable<AuthResponse> {
     const refreshToken = localStorage.getItem("refreshToken");
     const user         = this._currentUser();
@@ -65,13 +65,12 @@ export class AuthService {
       return throwError(() => new Error("No refresh token"));
     }
 
+    const userId = (user as any).id ?? (user as any).userId;
+
     return this.http
       .post<AuthResponse>(
         `${environment.identityUrl}/api/identity/refresh`,
-        {
-          userId: user.userId,
-          token:  refreshToken,
-        }
+        { userId, token: refreshToken }
       )
       .pipe(
         tap((response) => this.handleAuthResponse(response)),
@@ -91,8 +90,15 @@ export class AuthService {
     this.router.navigate(["/auth/login"]);
   }
 
+  // Returns token from signal OR localStorage
   getToken(): string | null {
-    return this._token() ?? localStorage.getItem("accessToken");
+    return this._token()
+        ?? localStorage.getItem("accessToken");
+  }
+
+  getUserId(): string {
+    const user = this._currentUser();
+    return (user as any)?.id ?? (user as any)?.userId ?? "";
   }
 
   isTokenExpired(): boolean {
@@ -107,13 +113,12 @@ export class AuthService {
   }
 
   private handleAuthResponse(response: AuthResponse): void {
-    localStorage.setItem("accessToken",
-      response.accessToken);
-    localStorage.setItem("refreshToken",
-      response.refreshToken);
+    localStorage.setItem("accessToken",  response.accessToken);
+    localStorage.setItem("refreshToken", response.refreshToken);
     localStorage.setItem("currentUser",
       JSON.stringify(response.user));
 
+    // Set signal immediately — interceptor reads this
     this._token.set(response.accessToken);
     this._currentUser.set(response.user);
   }
@@ -126,7 +131,9 @@ export class AuthService {
       try {
         const decoded   = jwtDecode<DecodedToken>(token);
         const isExpired = Date.now() > decoded.exp * 1000;
+
         if (!isExpired) {
+          // Set signal — ensures interceptor has token immediately
           this._token.set(token);
           this._currentUser.set(JSON.parse(user));
         } else {
