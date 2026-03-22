@@ -52,16 +52,94 @@ interface TenantUser {
   ],
   template: `
     <div class="page-container">
+
+      <!-- Header -->
       <div class="page-header">
         <h1>User Management</h1>
-        <p>Add Manager or Viewer users to your organization</p>
+        <p>Add and manage users in your organization</p>
       </div>
 
-      <mat-card class="form-card">
-        <h2>Add New User</h2>
+      <!-- Team Members List -->
+      <mat-card class="users-card">
+        <div class="card-header">
+          <h2>Team Members ({{ users().length }})</h2>
+        </div>
         <mat-divider></mat-divider>
         <mat-card-content>
-          <form [formGroup]="addUserForm" (ngSubmit)="onAddUser()"
+          @if (isLoading()) {
+            <div class="loading">
+              <mat-spinner diameter="32"></mat-spinner>
+            </div>
+          }
+          @if (!isLoading() && users().length === 0) {
+            <div class="empty">
+              <mat-icon>group_off</mat-icon>
+              <p>No users yet. Add your first team member below.</p>
+            </div>
+          }
+          @if (!isLoading() && users().length > 0) {
+            <table mat-table [dataSource]="users()"
+              class="users-table">
+
+              <ng-container matColumnDef="name">
+                <th mat-header-cell *matHeaderCellDef>Name</th>
+                <td mat-cell *matCellDef="let user">
+                  <div class="user-cell">
+                    <div class="user-avatar">
+                      {{ getInitials(user.fullName) }}
+                    </div>
+                    <div>
+                      <span class="user-name">
+                        {{ user.fullName }}
+                      </span>
+                      <span class="user-email">
+                        {{ user.email }}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="role">
+                <th mat-header-cell *matHeaderCellDef>Role</th>
+                <td mat-cell *matCellDef="let user">
+                  <span class="role-badge"
+                    [class]="'role-' + user.role.toLowerCase()">
+                    {{ user.role }}
+                  </span>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Status</th>
+                <td mat-cell *matCellDef="let user">
+                  <span class="status-badge"
+                    [class]="user.isActive ? 'active' : 'inactive'">
+                    {{ user.isActive ? "Active" : "Inactive" }}
+                  </span>
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="cols"></tr>
+              <tr mat-row
+                *matRowDef="let row; columns: cols;">
+              </tr>
+
+            </table>
+          }
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Add User Form -->
+      <mat-card class="form-card">
+        <div class="card-header">
+          <h2>Add New User</h2>
+          <p>Invite a Manager or Viewer to your organization</p>
+        </div>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <form [formGroup]="addUserForm"
+            (ngSubmit)="onAddUser()"
             class="user-form">
 
             <mat-form-field appearance="outline">
@@ -73,7 +151,8 @@ interface TenantUser {
 
             <mat-form-field appearance="outline">
               <mat-label>Email</mat-label>
-              <input matInput type="email" formControlName="email"
+              <input matInput type="email"
+                formControlName="email"
                 placeholder="john@company.com"/>
               <mat-icon matSuffix>email</mat-icon>
             </mat-form-field>
@@ -81,7 +160,8 @@ interface TenantUser {
             <mat-form-field appearance="outline">
               <mat-label>Password</mat-label>
               <input matInput type="password"
-                formControlName="password"/>
+                formControlName="password"
+                placeholder="Min 8 characters"/>
               <mat-icon matSuffix>lock</mat-icon>
             </mat-form-field>
 
@@ -89,12 +169,13 @@ interface TenantUser {
               <mat-label>Role</mat-label>
               <mat-select formControlName="role">
                 <mat-option value="Manager">
-                  Manager — Upload, approve, reject
+                  Manager — Upload, approve, reject documents
                 </mat-option>
                 <mat-option value="Viewer">
-                  Viewer — Read only
+                  Viewer — Read only access
                 </mat-option>
               </mat-select>
+              <mat-icon matSuffix>admin_panel_settings</mat-icon>
             </mat-form-field>
 
             @if (errorMessage()) {
@@ -109,75 +190,149 @@ interface TenantUser {
               [disabled]="isAdding() || addUserForm.invalid">
               @if (isAdding()) {
                 <mat-spinner diameter="20"></mat-spinner>
+                Adding...
               } @else {
                 <mat-icon>person_add</mat-icon>
+                Add User
               }
-              Add User
             </button>
 
           </form>
         </mat-card-content>
       </mat-card>
 
-      <!-- Users List -->
-      @if (users().length > 0) {
-        <mat-card class="users-card">
-          <h2>Team Members ({{ users().length }})</h2>
-          <mat-divider></mat-divider>
-          <mat-card-content>
-            <table mat-table [dataSource]="users()" class="users-table">
-              <ng-container matColumnDef="name">
-                <th mat-header-cell *matHeaderCellDef>Name</th>
-                <td mat-cell *matCellDef="let user">
-                  <div class="user-cell">
-                    <div class="user-avatar">
-                      {{ getInitials(user.fullName) }}
-                    </div>
-                    <div>
-                      <span class="user-name">{{ user.fullName }}</span>
-                      <span class="user-email">{{ user.email }}</span>
-                    </div>
-                  </div>
-                </td>
-              </ng-container>
-              <ng-container matColumnDef="role">
-                <th mat-header-cell *matHeaderCellDef>Role</th>
-                <td mat-cell *matCellDef="let user">
-                  <span class="role-badge"
-                    [class]="'role-' + user.role.toLowerCase()">
-                    {{ user.role }}
-                  </span>
-                </td>
-              </ng-container>
-              <tr mat-header-row *matHeaderRowDef="cols"></tr>
-              <tr mat-row *matRowDef="let row; columns: cols;"></tr>
-            </table>
-          </mat-card-content>
-        </mat-card>
-      }
     </div>
   `,
   styles: [`
-    .page-container { padding: 24px; max-width: 900px; margin: 0 auto; }
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 24px; font-weight: 700; color: #1E293B; margin: 0 0 4px; }
-    .page-header p { color: #64748B; margin: 0; font-size: 14px; }
-    .form-card, .users-card { border-radius: 12px; margin-bottom: 20px; }
-    .form-card h2, .users-card h2 { font-size: 16px; font-weight: 600; color: #1E293B; margin: 0; padding: 16px; }
-    .user-form { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 0; }
-    .user-form mat-form-field { width: 100%; }
-    .user-form button { grid-column: 1 / -1; height: 44px; display: flex; align-items: center; gap: 8px; width: fit-content; }
-    .error-banner { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; background: #FEF2F2; color: #DC2626; padding: 10px 14px; border-radius: 8px; font-size: 14px; }
+    .page-container {
+      padding: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .page-header {
+      margin-bottom: 24px;
+    }
+    .page-header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1E293B;
+      margin: 0 0 4px;
+    }
+    .page-header p {
+      color: #64748B;
+      margin: 0;
+      font-size: 14px;
+    }
+    .form-card, .users-card {
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      padding: 16px;
+    }
+    .card-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1E293B;
+      margin: 0 0 4px;
+    }
+    .card-header p {
+      font-size: 13px;
+      color: #64748B;
+      margin: 0;
+    }
+    .loading, .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      gap: 8px;
+      color: #64748B;
+    }
+    .empty mat-icon {
+      font-size: 40px;
+      width: 40px;
+      height: 40px;
+      color: #CBD5E1;
+    }
     .users-table { width: 100%; }
-    .user-cell { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
-    .user-avatar { width: 36px; height: 36px; min-width: 36px; border-radius: 50%; background: #2563EB; color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
-    .user-name { display: block; font-size: 14px; font-weight: 500; color: #1E293B; }
-    .user-email { display: block; font-size: 12px; color: #94A3B8; }
-    .role-badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .user-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+    }
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      border-radius: 50%;
+      background: #2563EB;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .user-name {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #1E293B;
+    }
+    .user-email {
+      display: block;
+      font-size: 12px;
+      color: #94A3B8;
+    }
+    .role-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .role-admin   { background: #FEF3C7; color: #D97706; }
     .role-manager { background: #F0FDF4; color: #16A34A; }
     .role-viewer  { background: #F1F5F9; color: #64748B; }
-    @media (max-width: 600px) { .user-form { grid-template-columns: 1fr; } }
+    .status-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .active   { background: #F0FDF4; color: #16A34A; }
+    .inactive { background: #FEF2F2; color: #DC2626; }
+    .user-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px 0;
+    }
+    .user-form mat-form-field { width: 100%; }
+    .user-form button {
+      grid-column: 1 / -1;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+    }
+    .error-banner {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #FEF2F2;
+      color: #DC2626;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    @media (max-width: 600px) {
+      .user-form { grid-template-columns: 1fr; }
+    }
   `],
 })
 export class UserManagementComponent implements OnInit {
@@ -190,7 +345,7 @@ export class UserManagementComponent implements OnInit {
   isLoading    = signal(false);
   isAdding     = signal(false);
   errorMessage = signal("");
-  cols         = ["name", "role"];
+  cols         = ["name", "role", "status"];
 
   addUserForm: FormGroup;
 
@@ -203,7 +358,25 @@ export class UserManagementComponent implements OnInit {
     });
   }
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    this.loadUsers();
+  }
+
+  private loadUsers(): void {
+    this.isLoading.set(true);
+    this.http
+      .get<TenantUser[]>(
+        `${environment.identityUrl}/api/identity/users`)
+      .subscribe({
+        next: (users) => {
+          this.users.set(Array.isArray(users) ? users : []);
+          this.isLoading.set(false);
+        },
+        error: () => {
+          this.isLoading.set(false);
+        },
+      });
+  }
 
   onAddUser(): void {
     if (this.addUserForm.invalid) return;
@@ -211,11 +384,13 @@ export class UserManagementComponent implements OnInit {
     this.isAdding.set(true);
     this.errorMessage.set("");
 
-    this.http.post<any>(
-      `${environment.identityUrl}/api/identity/users`,
-      this.addUserForm.value)
+    this.http
+      .post<any>(
+        `${environment.identityUrl}/api/identity/users`,
+        this.addUserForm.value)
       .subscribe({
         next: (newUser) => {
+          // Add new user to list immediately
           this.users.update(u => [...u, {
             userId:   newUser.userId,
             email:    this.addUserForm.value.email,
@@ -225,7 +400,8 @@ export class UserManagementComponent implements OnInit {
           }]);
           this.addUserForm.reset({ role: "Viewer" });
           this.isAdding.set(false);
-          this.snackBar.open("User added successfully", "Close",
+          this.snackBar.open(
+            "User added successfully", "Close",
             { duration: 3000 });
         },
         error: (err) => {
@@ -237,7 +413,10 @@ export class UserManagementComponent implements OnInit {
   }
 
   getInitials(name: string): string {
-    return (name ?? "").split(" ").map(n => n[0])
-      .join("").toUpperCase().slice(0, 2);
+    return (name ?? "").split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   }
 }
