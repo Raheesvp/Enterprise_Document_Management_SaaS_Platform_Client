@@ -5,7 +5,7 @@ import {
   inject,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { RouterLink } from "@angular/router";
+import { Router, RouterLink } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { MatTableModule } from "@angular/material/table";
 import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
@@ -20,6 +20,7 @@ import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
+import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import {
   Document,
@@ -29,6 +30,9 @@ import {
   DocumentStatusLabels,
 } from "../models/document.models";
 import { DocumentService } from "../services/document.service";
+import { AuthService } from "../../../core/services/auth.service";
+import { WorkflowService } from "../../workflow/services/workflow.service";
+import { PreviewDialogComponent } from "../shared/components/preview-dialog/preview-dialog.component";
 
 @Component({
   selector: "app-document-list",
@@ -50,6 +54,7 @@ import { DocumentService } from "../services/document.service";
     MatMenuModule,
     MatTooltipModule,
     MatSnackBarModule,
+    MatDialogModule,
   ],
   template: `
     <div class="page-container">
@@ -148,7 +153,7 @@ import { DocumentService } from "../services/document.service";
                     </span>
                     <span class="doc-type">
                       {{ docService.formatMimeType(doc.mimeType) }}
-                      · {{ docService.formatFileSize(doc.fileSizeBytes) }}
+                      Â· {{ docService.formatFileSize(doc.fileSizeBytes) }}
                     </span>
                   </div>
                 </div>
@@ -167,9 +172,19 @@ import { DocumentService } from "../services/document.service";
               </td>
             </ng-container>
 
+            <!-- Uploaded By Column -->
+            <ng-container matColumnDef="uploadedByName">
+              <th mat-header-cell *matHeaderCellDef>Uploaded By</th>
+              <td mat-cell *matCellDef="let doc">
+                <div class="uploader-cell">
+                   <span class="uploader-name">{{ doc.uploadedByName || 'System' }}</span>
+                </div>
+              </td>
+            </ng-container>
+
             <!-- Date Column -->
             <ng-container matColumnDef="createdAt">
-              <th mat-header-cell *matHeaderCellDef>Uploaded</th>
+              <th mat-header-cell *matHeaderCellDef>Uploaded On</th>
               <td mat-cell *matCellDef="let doc">
                 <span class="date-text">
                   {{ doc.createdAt | date: "dd MMM yyyy" }}
@@ -183,7 +198,8 @@ import { DocumentService } from "../services/document.service";
               <td mat-cell *matCellDef="let doc">
                 <button mat-icon-button
                   [matMenuTriggerFor]="docMenu"
-                  matTooltip="Actions">
+                  matTooltip="Actions"
+                  (click)="$event.stopPropagation()">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #docMenu="matMenu">
@@ -192,10 +208,27 @@ import { DocumentService } from "../services/document.service";
                     <mat-icon>visibility</mat-icon>
                     View Details
                   </button>
+                  
+                  <!-- Admin/Manager Actions -->
+                  @if (authService.isManager()) {
+                    <button mat-menu-item (click)="previewDocument(doc)">
+                      <mat-icon>preview</mat-icon>
+                      Preview
+                    </button>
+                    <button mat-menu-item (click)="downloadDocument(doc)">
+                      <mat-icon>download</mat-icon>
+                      Download
+                    </button>
+                    <button mat-menu-item (click)="updateStatus(doc)">
+                      <mat-icon>rule</mat-icon>
+                      Process Workflow
+                    </button>
+                  }
+
                   <button mat-menu-item
                     [routerLink]="['/workflow']">
                     <mat-icon>account_tree</mat-icon>
-                    View Workflow
+                    View History
                   </button>
                   @if (doc.status !== "Archived") {
                     <button mat-menu-item
@@ -368,6 +401,15 @@ import { DocumentService } from "../services/document.service";
       font-size: 12px;
       font-weight: 600;
     }
+    .uploader-cell {
+      display: flex;
+      align-items: center;
+    }
+    .uploader-name {
+      font-size: 13px;
+      color: #1E293B;
+      font-weight: 500;
+    }
     .date-text {
       font-size: 13px;
       color: #64748B;
@@ -388,9 +430,13 @@ import { DocumentService } from "../services/document.service";
 })
 export class DocumentListComponent implements OnInit {
   docService = inject(DocumentService);
+  authService     = inject(AuthService);
+  workflowService = inject(WorkflowService);
+  private router  = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private dialog   = inject(MatDialog);
 
-  displayedColumns = ["title", "status", "createdAt", "actions"];
+  displayedColumns = ["title", "status", "uploadedByName", "createdAt", "actions"];
 
   documents    = signal<Document[]>([]);
   totalCount   = signal(0);
@@ -427,13 +473,12 @@ export class DocumentListComponent implements OnInit {
     };
 
     this.docService.getDocuments(filter).subscribe({
-      next: (response) => {
+      next: (response: any) => {
         this.documents.set(response.items ?? []);
         this.totalCount.set(response.totalCount ?? 0);
         this.isLoading.set(false);
       },
       error: () => {
-        // API not returning list format yet — show empty
         this.documents.set([]);
         this.totalCount.set(0);
         this.isLoading.set(false);
@@ -476,6 +521,41 @@ export class DocumentListComponent implements OnInit {
           "Failed to archive document", "Close",
           { duration: 3000 });
       },
+    });
+  }
+
+  previewDocument(doc: Document): void {
+    this.dialog.open(PreviewDialogComponent, {
+      data: { document: doc },
+      width: "600px"
+    });
+  }
+
+  downloadDocument(doc: Document): void {
+    this.docService.downloadDocument(doc.id).subscribe({
+      next: (blob: any) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.title;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.snackBar.open("Failed to download document", "Close", { duration: 3000 });
+      }
+    });
+  }
+
+  updateStatus(doc: Document): void {
+    this.workflowService.getWorkflowByDocumentId(doc.id).subscribe({
+      next: (wf: any) => {
+        this.router.navigate(["/workflow", wf.id]);
+      },
+      error: (err: any) => {
+        console.error("Workflow not found", err);
+        this.snackBar.open("No active workflow found for this document", "Close", { duration: 3000 });
+      }
     });
   }
 
