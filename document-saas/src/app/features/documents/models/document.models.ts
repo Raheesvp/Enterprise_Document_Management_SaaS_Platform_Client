@@ -67,3 +67,18 @@ export const DocumentStatusColors: Record<DocumentStatus, string> = {
   Rejected:    "#DC2626",
   Archived:    "#7C3AED",
 };
+
+
+export interface DocumentIndex {
+  id: string;
+  tenantId: string;
+  title: string;
+  contentType: string;
+  status: string;
+  uploadedByName: string;
+  fileSizeBytes: number;
+  createdAt: Date;
+  // Optional: add these if you included them in your C# DocumentIndex
+  description?: string;
+  tags?: string;
+}

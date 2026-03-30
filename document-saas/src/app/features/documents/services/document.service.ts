@@ -7,6 +7,7 @@ import {
   DocumentListResponse,
   DocumentFilter,
   DocumentVersion,
+  DocumentIndex,
 } from "../models/document.models";
 
 @Injectable({ providedIn: "root" })
@@ -118,4 +119,8 @@ export class DocumentService {
     };
     return map[mimeType] ?? mimeType.split("/")[1]?.toUpperCase() ?? "File";
   }
+
+searchDocuments(q: string): Observable<DocumentIndex[]> {
+  return this.http.get<DocumentIndex[]>(`${this.base}/search?q=${encodeURIComponent(q)}`);
+}
 }

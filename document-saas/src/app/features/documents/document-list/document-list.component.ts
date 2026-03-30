@@ -21,13 +21,14 @@ import { MatMenuModule } from "@angular/material/menu";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatDialog, MatDialogModule } from "@angular/material/dialog";
-import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
+import { debounceTime, distinctUntilChanged, Subject, switchMap, of } from "rxjs";
 import {
   Document,
   DocumentFilter,
   DocumentStatus,
   DocumentStatusColors,
   DocumentStatusLabels,
+  DocumentIndex,
 } from "../models/document.models";
 import { DocumentService } from "../services/document.service";
 import { AuthService } from "../../../core/services/auth.service";
@@ -81,7 +82,7 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
           <input matInput
             [(ngModel)]="searchTerm"
             (ngModelChange)="onSearchChange($event)"
-            placeholder="Search by title..."/>
+            placeholder="Search by title, uploader..."/>
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
@@ -98,6 +99,14 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
             <mat-option value="Archived">Archived</mat-option>
           </mat-select>
         </mat-form-field>
+
+        <!-- Search mode indicator -->
+        @if (isEsSearch) {
+          <span class="es-badge">
+            <mat-icon style="font-size:14px;width:14px;height:14px;">bolt</mat-icon>
+            Full-text search
+          </span>
+        }
 
         <!-- Clear Filters -->
         @if (selectedStatus || searchTerm) {
@@ -122,12 +131,14 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
         <div class="empty-state">
           <mat-icon class="empty-icon">description</mat-icon>
           <h3>No documents found</h3>
-          <p>Upload your first document to get started</p>
-          <button mat-raised-button color="primary"
-            routerLink="/documents/upload">
-            <mat-icon>upload_file</mat-icon>
-            Upload Document
-          </button>
+          <p>{{ searchTerm ? 'No results for "' + searchTerm + '"' : 'Upload your first document to get started' }}</p>
+          @if (!searchTerm) {
+            <button mat-raised-button color="primary"
+              routerLink="/documents/upload">
+              <mat-icon>upload_file</mat-icon>
+              Upload Document
+            </button>
+          }
         </div>
       }
 
@@ -177,7 +188,7 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
               <th mat-header-cell *matHeaderCellDef>Uploaded By</th>
               <td mat-cell *matCellDef="let doc">
                 <div class="uploader-cell">
-                   <span class="uploader-name">{{ doc.uploadedByName || 'System' }}</span>
+                  <span class="uploader-name">{{ doc.uploadedByName || 'System' }}</span>
                 </div>
               </td>
             </ng-container>
@@ -192,53 +203,58 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
               </td>
             </ng-container>
 
-          <ng-container matColumnDef="actions">
-  <th mat-header-cell *matHeaderCellDef></th>
-  <td mat-cell *matCellDef="let doc">
-    <button mat-icon-button
-      [matMenuTriggerFor]="docMenu"
-      matTooltip="Actions"
-      (click)="$event.stopPropagation()"> <mat-icon>more_vert</mat-icon>
-    </button>
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let doc">
+                <button mat-icon-button
+                  [matMenuTriggerFor]="docMenu"
+                  matTooltip="Actions"
+                  (click)="$event.stopPropagation()">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
 
-    <mat-menu #docMenu="matMenu">
-      <button mat-menu-item [routerLink]="['/documents', doc.id]">
-        <mat-icon>visibility</mat-icon>
-        View Details
-      </button>
+                <mat-menu #docMenu="matMenu">
+                  <button mat-menu-item [routerLink]="['/documents', doc.id]">
+                    <mat-icon>visibility</mat-icon>
+                    View Details
+                  </button>
 
-      @if (authService.isManager()) {
-        <button mat-menu-item (click)="previewDocument(doc); $event.stopPropagation()">
-          <mat-icon>preview</mat-icon>
-          Preview
-        </button>
-        <button mat-menu-item (click)="downloadDocument(doc); $event.stopPropagation()">
-          <mat-icon>download</mat-icon>
-          Download
-        </button>
-        <button mat-menu-item (click)="updateStatus(doc); $event.stopPropagation()">
-          <mat-icon>rule</mat-icon>
-          Process Workflow
-        </button>
-      }
+                  @if (authService.isManager()) {
+                    <button mat-menu-item
+                      (click)="previewDocument(doc); $event.stopPropagation()">
+                      <mat-icon>preview</mat-icon>
+                      Preview
+                    </button>
+                    <button mat-menu-item
+                      (click)="downloadDocument(doc); $event.stopPropagation()">
+                      <mat-icon>download</mat-icon>
+                      Download
+                    </button>
+                    <button mat-menu-item
+                      (click)="updateStatus(doc); $event.stopPropagation()">
+                      <mat-icon>rule</mat-icon>
+                      Process Workflow
+                    </button>
+                  }
 
-      <button mat-menu-item [routerLink]="['/workflow']">
-        <mat-icon>account_tree</mat-icon>
-        View History
-      </button>
+                  <button mat-menu-item [routerLink]="['/workflow']">
+                    <mat-icon>account_tree</mat-icon>
+                    View History
+                  </button>
 
-      @if (doc.status !== "Archived") {
-        <button mat-menu-item (click)="archiveDocument(doc); $event.stopPropagation()">
-          <mat-icon>archive</mat-icon>
-          Archive
-        </button>
-      }
-    </mat-menu> </td>
-</ng-container>
+                  @if (doc.status !== 'Archived') {
+                    <button mat-menu-item
+                      (click)="archiveDocument(doc); $event.stopPropagation()">
+                      <mat-icon>archive</mat-icon>
+                      Archive
+                    </button>
+                  }
+                </mat-menu>
+              </td>
+            </ng-container>
 
-            <tr mat-header-row
-              *matHeaderRowDef="displayedColumns">
-            </tr>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
             <tr mat-row
               *matRowDef="let row; columns: displayedColumns;"
               class="table-row"
@@ -247,15 +263,17 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
 
           </table>
 
-          <!-- Paginator -->
-          <mat-paginator
-            [length]="totalCount()"
-            [pageSize]="pageSize"
-            [pageSizeOptions]="[10, 25, 50]"
-            [pageIndex]="currentPage() - 1"
-            (page)="onPageChange($event)"
-            showFirstLastButtons>
-          </mat-paginator>
+          <!-- Paginator — hidden during ES search -->
+          @if (!isEsSearch) {
+            <mat-paginator
+              [length]="totalCount()"
+              [pageSize]="pageSize"
+              [pageSizeOptions]="[10, 25, 50]"
+              [pageIndex]="currentPage() - 1"
+              (page)="onPageChange($event)"
+              showFirstLastButtons>
+            </mat-paginator>
+          }
 
         </div>
       }
@@ -306,6 +324,17 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
     .status-field {
       width: 180px;
     }
+    .es-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #EFF6FF;
+      color: #2563EB;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .loading-container {
       display: flex;
       flex-direction: column;
@@ -349,9 +378,7 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
       overflow: hidden;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
-    .documents-table {
-      width: 100%;
-    }
+    .documents-table { width: 100%; }
     .doc-title-cell {
       display: flex;
       align-items: center;
@@ -396,10 +423,7 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
       font-size: 12px;
       font-weight: 600;
     }
-    .uploader-cell {
-      display: flex;
-      align-items: center;
-    }
+    .uploader-cell { display: flex; align-items: center; }
     .uploader-name {
       font-size: 13px;
       color: #1E293B;
@@ -424,34 +448,71 @@ import { PreviewDialogComponent } from "../shared/components/preview-dialog/prev
   `],
 })
 export class DocumentListComponent implements OnInit {
-  docService = inject(DocumentService);
+  docService      = inject(DocumentService);
   authService     = inject(AuthService);
   workflowService = inject(WorkflowService);
-  private router  = inject(Router);
+  private router   = inject(Router);
   private snackBar = inject(MatSnackBar);
   private dialog   = inject(MatDialog);
 
   displayedColumns = ["title", "status", "uploadedByName", "createdAt", "actions"];
 
-  documents    = signal<Document[]>([]);
-  totalCount   = signal(0);
-  currentPage  = signal(1);
-  isLoading    = signal(false);
+  documents   = signal<Document[]>([]);
+  totalCount  = signal(0);
+  currentPage = signal(1);
+  isLoading   = signal(false);
 
   pageSize       = 10;
   searchTerm     = "";
   selectedStatus = "";
+  isEsSearch     = false;         // true when showing ES results
 
   private searchSubject = new Subject<string>();
 
   ngOnInit(): void {
-    // Debounce search input
     this.searchSubject.pipe(
       debounceTime(400),
-      distinctUntilChanged()
-    ).subscribe(() => {
-      this.currentPage.set(1);
-      this.loadDocuments();
+      distinctUntilChanged(),
+      switchMap(q => {
+        if (q && q.trim().length > 0) {
+          // --- Elasticsearch path ---
+          this.isEsSearch = true;
+          this.isLoading.set(true);
+          return this.docService.searchDocuments(q.trim());
+        } else {
+          // --- Normal DB path ---
+          this.isEsSearch = false;
+          this.loadDocuments();
+          return of(null);
+        }
+      })
+    ).subscribe({
+      next: (results) => {
+        if (results !== null) {
+          // Map DocumentIndex → Document shape for the table
+          this.documents.set(results.map((r: DocumentIndex) => ({
+            id:               r.id,
+            tenantId:         r.tenantId,
+            title:            r.title,
+            status:           this.toDocumentStatus(r.status),
+            mimeType:         r.contentType,
+            fileSizeBytes:    r.fileSizeBytes,
+            uploadedByName:   r.uploadedByName,
+            createdAt:        this.toIsoDateString(r.createdAt),
+            currentVersion:   1,
+            storagePath:      "",
+            uploadedByUserId: "",
+            updatedAt:        this.toIsoDateString(r.createdAt),
+            downloadUrl:      undefined,
+          })));
+          this.totalCount.set(results.length);
+          this.isLoading.set(false);
+        }
+      },
+      error: () => {
+        this.isLoading.set(false);
+        this.snackBar.open('Search failed', 'Close', { duration: 3000 });
+      }
     });
 
     this.loadDocuments();
@@ -464,7 +525,7 @@ export class DocumentListComponent implements OnInit {
       page:     this.currentPage(),
       pageSize: this.pageSize,
       status:   this.selectedStatus || undefined,
-      search:   this.searchTerm || undefined,
+      search:   this.searchTerm     || undefined,
     };
 
     this.docService.getDocuments(filter).subscribe({
@@ -499,6 +560,7 @@ export class DocumentListComponent implements OnInit {
   clearFilters(): void {
     this.searchTerm     = "";
     this.selectedStatus = "";
+    this.isEsSearch     = false;
     this.currentPage.set(1);
     this.loadDocuments();
   }
@@ -506,42 +568,33 @@ export class DocumentListComponent implements OnInit {
   archiveDocument(doc: Document): void {
     this.docService.archiveDocument(doc.id).subscribe({
       next: () => {
-        this.snackBar.open(
-          `"${doc.title}" archived`, "Close",
-          { duration: 3000 });
+        this.snackBar.open(`"${doc.title}" archived`, "Close", { duration: 3000 });
         this.loadDocuments();
       },
       error: () => {
-        this.snackBar.open(
-          "Failed to archive document", "Close",
-          { duration: 3000 });
+        this.snackBar.open("Failed to archive document", "Close", { duration: 3000 });
       },
     });
   }
 
   previewDocument(doc: Document): void {
     this.dialog.open(PreviewDialogComponent, {
-      data: { document: doc },
+      data:  { document: doc },
       width: "600px"
     });
   }
 
-downloadDocument(doc: Document): void {
-  // 1. Check if the document has a direct download URL
-  if (!doc.downloadUrl) {
-    this.snackBar.open("Download URL not available", "Close", { duration: 3000 });
-    return;
+  downloadDocument(doc: Document): void {
+    if (!doc.downloadUrl) {
+      this.snackBar.open("Download URL not available", "Close", { duration: 3000 });
+      return;
+    }
+    this.snackBar.open(`Downloading ${doc.title}...`, 'Close', { duration: 2000 });
+    this.docService.downloadFromUrl(
+      doc.downloadUrl,
+      this.docService.buildDownloadFileName(doc.title, doc.mimeType)
+    );
   }
-
-  // 2. Optional: Show a brief feedback message
-  this.snackBar.open(`Downloading ${doc.title}...`, 'Close', { duration: 2000 });
-
-  // 3. Use the service helper to trigger the browser download
-  this.docService.downloadFromUrl(
-    doc.downloadUrl,
-    this.docService.buildDownloadFileName(doc.title, doc.mimeType)
-  );
-}
 
   updateStatus(doc: Document): void {
     this.workflowService.getWorkflowByDocumentId(doc.id).subscribe({
@@ -556,26 +609,33 @@ downloadDocument(doc: Document): void {
   }
 
   getStatusColor(status: string): string {
-    return DocumentStatusColors[status as DocumentStatus]
-      ?? "#64748B";
+    return DocumentStatusColors[status as DocumentStatus] ?? "#64748B";
   }
 
   getStatusLabel(status: string): string {
-    return DocumentStatusLabels[status as DocumentStatus]
-      ?? status;
+    return DocumentStatusLabels[status as DocumentStatus] ?? status;
   }
 
-private readonly MIME_TYPE_COLORS: Record<string, string> = {
-  "application/pdf": "#DC2626",
-  "image/jpeg": "#2563EB",
-  "image/png": "#2563EB",
-  "text/plain": "#64748B",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "#2B579A",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "#217346",
-};
+  private toDocumentStatus(status: string): DocumentStatus {
+    return status in DocumentStatusLabels
+      ? (status as DocumentStatus)
+      : "Active";
+  }
 
-getTypeColor(mimeType: string): string {
-  return this.MIME_TYPE_COLORS[mimeType] ?? "#7C3AED";
-}
+  private toIsoDateString(value: string | Date): string {
+    return value instanceof Date ? value.toISOString() : value;
+  }
 
+  private readonly MIME_TYPE_COLORS: Record<string, string> = {
+    "application/pdf":   "#DC2626",
+    "image/jpeg":        "#2563EB",
+    "image/png":         "#2563EB",
+    "text/plain":        "#64748B",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "#2B579A",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       "#217346",
+  };
+
+  getTypeColor(mimeType: string): string {
+    return this.MIME_TYPE_COLORS[mimeType] ?? "#7C3AED";
+  }
 }
