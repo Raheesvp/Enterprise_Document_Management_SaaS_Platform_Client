@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from "@angular/core";
+import { Component, inject, OnInit, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { RouterLink } from "@angular/router";
 import { MatCardModule } from "@angular/material/card";
@@ -309,10 +309,10 @@ export class DashboardComponent implements OnInit {
 
   getVisibleCards(): StatCard[] {
     const role = this.authService.currentUser()?.role ?? "";
-    return this.allCards.filter(c => c.roles.includes(role));
+    return this.allCards().filter(c => c.roles.includes(role));
   }
 
-  private allCards: StatCard[] = [
+  private allCards = computed<StatCard[]>(() => [
     {
       title:    "Documents",
       value:    this.docCount(),
@@ -349,7 +349,7 @@ export class DashboardComponent implements OnInit {
       route:    "/documents/upload",
       roles:    ["Admin", "Manager"],
     },
-  ];
+  ]);
 
   getTimeOfDay(): string {
     const hour = new Date().getHours();
