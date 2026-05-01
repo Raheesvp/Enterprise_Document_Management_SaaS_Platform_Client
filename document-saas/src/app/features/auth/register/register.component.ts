@@ -16,6 +16,7 @@ import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatStepperModule } from "@angular/material/stepper";
 import { AuthService } from "../../../core/services/auth.service";
+import { PasswordValidator } from "../../../core/validators/password-validator";
 
 @Component({
   selector: "app-register",
@@ -158,8 +159,14 @@ import { AuthService } from "../../../core/services/auth.service";
                 @if (registerForm.get("adminPassword")?.hasError("required") && registerForm.get("adminPassword")?.touched) {
                   <mat-error>Password is required</mat-error>
                 }
-                @if (registerForm.get("adminPassword")?.hasError("minlength")) {
-                  <mat-error>Password must be at least 8 characters</mat-error>
+                @if (registerForm.get("adminPassword")?.hasError("passwordStrength")) {
+                  <mat-error>
+                    Password must have:
+                    @if (!registerForm.get("adminPassword")?.errors?.['passwordStrength']?.isLongEnough) { <span>min 8 chars, </span> }
+                    @if (!registerForm.get("adminPassword")?.errors?.['passwordStrength']?.hasUpperCase) { <span>uppercase, </span> }
+                    @if (!registerForm.get("adminPassword")?.errors?.['passwordStrength']?.hasNumeric) { <span>number, </span> }
+                    @if (!registerForm.get("adminPassword")?.errors?.['passwordStrength']?.hasSpecialChar) { <span>special char</span> }
+                  </mat-error>
                 }
               </mat-form-field>
             </div>
@@ -572,7 +579,7 @@ export class RegisterComponent {
       adminEmail:    ["", [Validators.required, Validators.email]],
       adminPassword: ["", [
         Validators.required,
-        Validators.minLength(8)
+        PasswordValidator.strength()
       ]],
     });
   }
